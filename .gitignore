@@ -11,3 +11,4 @@ wheels/
 
 #other files
 .env
+test*.*
