@@ -1,4 +1,5 @@
 import os
+import sys
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -20,46 +21,55 @@ def main():
     parser.add_argument("user_prompt", type=str, help="User prompt")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
-    # Now we can access `args.user_prompt`
-    #
     messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=messages,
-        config=types.GenerateContentConfig(
-            tools=[available_functions], system_instruction=system_prompt
-        ),
-    )
+    i = 0  # initalizing iteration counter
 
-    prompt_token_count = response.usage_metadata.prompt_token_count
-    candidates_token_count = response.usage_metadata.candidates_token_count
+    for i in range(20):
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=messages,
+            config=types.GenerateContentConfig(
+                tools=[available_functions], system_instruction=system_prompt
+            ),
+        )
+        if response.candidates is not None:
+            for candidate in response.candidates:
+                messages.append(candidate)
 
-    if args.verbose:
-        print(f"User prompt: {args.user_prompt}")
-        print(f"Prompt tokens: {prompt_token_count}")
-        print(f"Response tokens: {candidates_token_count}\n")
-
-    function_calls = response.function_calls
-    function_results = []
-
-    if function_calls is None:
-        print(response.text)
-
-    else:
-        for function_call in function_calls:
-            function_call_result = call_function(function_call, args.verbose)
-
-            if function_call_result.parts[0].function_response == None:
-                raise Exception("Error: No function response object")
-
-            if function_call_result.parts[0].function_response.response == None:
-                raise Exception("Error: No function response")
-
-        function_results.append(function_call_result.parts[0])
+        prompt_token_count = response.usage_metadata.prompt_token_count
+        candidates_token_count = response.usage_metadata.candidates_token_count
 
         if args.verbose:
-            print(f"-> {function_call_result.parts[0].function_response.response}")
+            print(f"User prompt: {args.user_prompt}")
+            print(f"Prompt tokens: {prompt_token_count}")
+            print(f"Response tokens: {candidates_token_count}\n")
+
+        function_calls = response.function_calls
+        function_results = []
+
+        if function_calls is None:
+            return print(response.text)
+
+        else:
+            for function_call in function_calls:
+                function_call_result = call_function(function_call, args.verbose)
+
+                if function_call_result.parts[0].function_response == None:
+                    raise Exception("Error: No function response object")
+
+                if function_call_result.parts[0].function_response.response == None:
+                    raise Exception("Error: No function response")
+
+            function_results.append(function_call_result.parts[0])
+
+            if args.verbose:
+                print(f"-> {function_call_result.parts[0].function_response.response}")
+
+            messages.append(types.Content(role="user", parts=function_results))
+        i += 1
+
+    sys.exit("Code:1 Agent failed to produce a final response after 20 iterations")
 
 
 if __name__ == "__main__":
